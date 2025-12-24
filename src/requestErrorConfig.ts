@@ -1,6 +1,7 @@
 ﻿import type { RequestOptions } from '@@/plugin-request/request';
 import type { RequestConfig } from '@umijs/max';
 import { message, notification } from 'antd';
+import { history } from '@umijs/max';
 
 // 错误处理方案： 错误类型
 enum ErrorShowType {
@@ -44,6 +45,7 @@ export const errorConfig: RequestConfig = {
       // 我们的 errorThrower 抛出的错误。
       if (error.name === 'BizError') {
         const errorInfo: ResponseStructure | undefined = error.info;
+        console.log("🚀 ~ errorHandler ~ rror.info: ", error.info);
         if (errorInfo) {
           const { errorMessage, errorCode } = errorInfo;
           switch (errorInfo.showType) {
@@ -53,6 +55,7 @@ export const errorConfig: RequestConfig = {
             case ErrorShowType.WARN_MESSAGE:
               message.warning(errorMessage);
               break;
+
             case ErrorShowType.ERROR_MESSAGE:
               message.error(errorMessage);
               break;
@@ -89,19 +92,24 @@ export const errorConfig: RequestConfig = {
   requestInterceptors: [
     (config: RequestOptions) => {
       // 拦截请求配置，进行个性化处理。
-      const url = config?.url?.concat('?token=123');
-      return { ...config, url };
+      const token = localStorage.getItem('token');
+      return {
+        ...config,
+        headers: {
+          ...config.headers,
+          Accept: 'application/json',
+          Token: token ? `Bearer ${token}` : '',
+        },
+      };
     },
   ],
 
   // 响应拦截器
   responseInterceptors: [
-    (response) => {
-      // 拦截响应数据，进行个性化处理
-      const { data } = response as unknown as ResponseStructure;
-
-      if (data?.success === false) {
-        message.error('请求失败！');
+    async (response) => {
+      if (response.status === 401) {
+        localStorage.removeItem('token');
+        history.push('/user/login');
       }
       return response;
     },

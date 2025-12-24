@@ -19,7 +19,7 @@ const PUBLIC_PATH: string = '/';
 
 export default defineConfig({
   define: {
-    API_URL: 'http://192.168.90.49:3006/admin', // API地址
+    API_URL: 'http://192.168.90.49:3006', // API地址
   },
   /**
    * @name 开启 hash 模式

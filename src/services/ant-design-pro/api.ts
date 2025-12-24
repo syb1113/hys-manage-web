@@ -6,7 +6,7 @@ import { request } from '@umijs/max';
 export async function currentUser(options?: { [key: string]: any }) {
   return request<{
     data: API.CurrentUser;
-  }>('/api/currentUser', {
+  }>('admin/managers/profile', {
     method: 'GET',
     ...(options || {}),
   });
@@ -21,14 +21,10 @@ export async function outLogin(options?: { [key: string]: any }) {
 }
 
 /** 登录接口 POST /login */
-export async function login(body: API.LoginParams, options?: { [key: string]: any }) {
-  return request<API.LoginResult>('/login', {
+export async function login(body: API.LoginParams) {
+  return request<API.LoginResult>('/auth/admin_login', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    data: body,
-    ...(options || {}),
+    data: body
   });
 }
 
