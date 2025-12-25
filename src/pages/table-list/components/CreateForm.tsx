@@ -4,11 +4,13 @@ import {
   ModalForm,
   ProFormText,
   ProFormTextArea,
+  ProFormItem,
 } from '@ant-design/pro-components';
 import { FormattedMessage, useIntl, useRequest } from '@umijs/max';
 import { Button, message } from 'antd';
 import type { FC } from 'react';
-import { addRule } from '@/services/ant-design-pro/api';
+import { addDepartment } from '@/services/ant-design-pro/departments';
+import { ImageUpload } from '@/components';
 
 interface CreateFormProps {
   reload?: ActionType['reload'];
@@ -18,13 +20,8 @@ const CreateForm: FC<CreateFormProps> = (props) => {
   const { reload } = props;
 
   const [messageApi, contextHolder] = message.useMessage();
-  /**
-   * @en-US International configuration
-   * @zh-CN 国际化配置
-   * */
-  const intl = useIntl();
 
-  const { run, loading } = useRequest(addRule, {
+  const { run, loading } = useRequest(addDepartment, {
     manual: true,
     onSuccess: () => {
       messageApi.success('Added successfully');
@@ -39,39 +36,43 @@ const CreateForm: FC<CreateFormProps> = (props) => {
     <>
       {contextHolder}
       <ModalForm
-        title={intl.formatMessage({
-          id: 'pages.searchTable.createForm.newRule',
-          defaultMessage: 'New rule',
-        })}
+        title='新建科室'
         trigger={
           <Button type="primary" icon={<PlusOutlined />}>
             <FormattedMessage id="pages.searchTable.new" defaultMessage="New" />
           </Button>
         }
-        width="400px"
+        width="600px"
         modalProps={{ okButtonProps: { loading } }}
         onFinish={async (value) => {
-          await run({ data: value as API.RuleListItem });
+          await run( value as API.DepartmentAdd );
 
           return true;
         }}
       >
         <ProFormText
+          label='科室昵称'
           rules={[
             {
               required: true,
               message: (
                 <FormattedMessage
-                  id="pages.searchTable.ruleName"
+                  id="pages.searchTable.DepartmentName"
                   defaultMessage="Rule name is required"
                 />
               ),
             },
           ]}
-          width="md"
           name="name"
         />
-        <ProFormTextArea width="md" name="desc" />
+        <ProFormTextArea label='科室描述' name="desc" />
+        <ProFormTextArea label='科室详情' name="content" />
+        <ProFormItem label="科室图片" name="image">
+          <ImageUpload
+            buttonText="上传科室图片"
+            maxSize={5}
+          />
+        </ProFormItem>
       </ModalForm>
     </>
   );

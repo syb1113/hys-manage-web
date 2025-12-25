@@ -30,24 +30,24 @@ declare namespace API {
   };
 
   type PageParams = {
-    current?: number;
-    pageSize?: number;
+    per?: number;
+    page?: number;
   };
 
   type RuleListItem = {
-    key?: number;
-    disabled?: boolean;
-    href?: string;
-    avatar?: string;
     name?: string;
-    owner?: string;
     desc?: string;
-    callNo?: number;
-    status?: number;
-    updatedAt?: string;
+    content?: string;
+    image?: string;
     createdAt?: string;
-    progress?: number;
+    updatedAt?: string;
   };
+  type DepartmentAdd = {
+    name: string;
+    desc?: string;
+    content?: string;
+    image?: string;
+  }
 
   type RuleList = {
     data?: RuleListItem[];
@@ -55,6 +55,7 @@ declare namespace API {
     total?: number;
     success?: boolean;
   };
+
 
   type FakeCaptcha = {
     code?: number;

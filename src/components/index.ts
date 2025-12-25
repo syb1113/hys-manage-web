@@ -8,5 +8,8 @@
 import Footer from './Footer';
 import { Question, SelectLang } from './RightContent';
 import { AvatarDropdown, AvatarName } from './RightContent/AvatarDropdown';
+import ImageUpload from './ImageUpload';
 
-export { AvatarDropdown, AvatarName, Footer, Question, SelectLang };
+export { AvatarDropdown, AvatarName, Footer, Question, SelectLang, ImageUpload };
+
+export type { ImageUploadProps } from './ImageUpload';

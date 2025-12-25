@@ -1,5 +1,5 @@
-import { InboxOutlined, LoadingOutlined, PlusOutlined } from '@ant-design/icons';
-import { Upload, Modal, message, UploadProps, Button } from 'antd';
+import { InboxOutlined, LoadingOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Upload, Modal, message, UploadProps, Image, Button } from 'antd';
 import type { UploadFile } from 'antd/es/upload/interface';
 import React, { useState } from 'react';
 import { uploadApi } from '@/services/ant-design-pro/common';
@@ -44,7 +44,6 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
 }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [fileList, setFileList] = useState<UploadFile[]>([]);
-  const [uploading, setUploading] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | undefined>(value);
 
   // 当外部 value 变化时更新内部状态
@@ -53,34 +52,63 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
   }, [value]);
 
   const handleUpload: UploadProps['customRequest'] = async (options) => {
-    const { file, onSuccess: onUploadSuccess, onError } = options;
+    const { file, onSuccess: onUploadSuccess, onError, onProgress } = options;
     const uploadFile = file as File;
 
-    setUploading(true);
-
     try {
+      // 模拟上传进度
+      onProgress?.({ percent: 0 } as any);
+      
       const response = await uploadApi(uploadFile);
+      console.log("🚀 ~ handleUpload ~ response: ", response);
 
-      if (response.success && response.data?.url) {
-        const url = response.data.url;
+      if (response.success && response.data) {
+        const url = API_URL + response.data;
+        console.log("🚀 ~ handleUpload ~ url: ", url);
         
-        setImageUrl(url);
-        setFileList([]);
-        setModalVisible(false);
+        // 完成进度
+        onProgress?.({ percent: 100 } as any);
         
-        message.success('上传成功');
-        onChange?.(url);
-        onSuccess?.(url);
-        onUploadSuccess?.(response, uploadFile as any);
+        // 调用成功回调，传入包含 URL 的响应
+        // 响应对象会被 Upload 组件传递到 onChange 中，我们可以从中获取 url
+        const responseWithUrl = {
+          ...response,
+          url: url,
+        };
+        onUploadSuccess?.(responseWithUrl as any, uploadFile as any);
       } else {
+        console.log('else  上传失败')
         throw new Error(response.errorMessage || '上传失败');
       }
     } catch (error: any) {
       const errorMessage = error?.errorMessage || error?.message || '上传失败，请重试';
       message.error(errorMessage);
+      console.log('catch error  上传失败')
+      
+      // 调用错误回调，文件状态会在 onChange 中自动更新为 error
       onError?.(error as Error);
-    } finally {
-      setUploading(false);
+    }
+  };
+
+  // 确认按钮处理
+  const handleConfirm = () => {
+    // 从 fileList 中获取已上传成功的文件 URL
+    const uploadedFile = fileList.find(file => file.status === 'done' && file.url);
+    if (uploadedFile?.url) {
+      setImageUrl(uploadedFile.url);
+      onChange?.(uploadedFile.url);
+      onSuccess?.(uploadedFile.url);
+      setFileList([]);
+      setModalVisible(false);
+    }
+  };
+
+  // 取消按钮处理
+  const handleCancel = () => {
+    const isUploading = fileList.some(file => file.status === 'uploading');
+    if (!isUploading) {
+      setFileList([]);
+      setModalVisible(false);
     }
   };
 
@@ -157,80 +185,156 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
       return true;
     },
     onChange: (info) => {
-      setFileList(info.fileList);
+      // 更新文件列表
+      // Upload 组件会自动更新文件状态，我们需要确保 URL 被正确设置
+      const updatedFileList = info.fileList.map((file) => {
+        // 如果文件上传成功，从 response 中获取 URL
+        if (file.status === 'done' && file.response?.url) {
+          return {
+            ...file,
+            url: file.response.url,
+          };
+        }
+        return file;
+      });
+      setFileList(updatedFileList);
     },
     onRemove: () => {
       setFileList([]);
-    },
-    showUploadList: false,
+    }
   };
+
+  // 如果有图片，显示图片预览；否则显示上传按钮
+  const uploadButton = (
+    <div
+      onClick={() => !disabled && setModalVisible(true)}
+      style={{
+        width: 104,
+        height: 104,
+        border: '1px dashed #d9d9d9',
+        borderRadius: 4,
+        backgroundColor: '#fafafa',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        transition: 'border-color 0.3s',
+      }}
+      onMouseEnter={(e) => {
+        if (!disabled) {
+          e.currentTarget.style.borderColor = '#1890ff';
+        }
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = '#d9d9d9';
+      }}
+    >
+      <PlusOutlined style={{ fontSize: 24, color: '#8c8c8c' }} />
+      <div style={{ marginTop: 8, color: '#8c8c8c', fontSize: 14 }}>
+        {buttonText}
+      </div>
+    </div>
+  );
 
   return (
     <>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {showPreview && imageUrl && (
+      <div style={{ display: 'inline-block' }}>
+        {imageUrl && showPreview ? (
           <div style={{ position: 'relative', display: 'inline-block' }}>
-            <img
+            <Image
               src={imageUrl}
               alt="预览"
+              width={104}
+              height={104}
+              preview={{
+                mask: null,
+              }}
               style={{
-                width: 104,
-                height: 104,
-                objectFit: 'cover',
                 borderRadius: 4,
                 border: '1px solid #d9d9d9',
+                objectFit: 'cover',
               }}
             />
             {!disabled && (
-              <span
-                onClick={handleRemove}
-                style={{
-                  position: 'absolute',
-                  top: -8,
-                  right: -8,
-                  cursor: 'pointer',
-                  fontSize: 20,
-                  color: '#ff4d4f',
-                  background: '#fff',
-                  borderRadius: '50%',
-                  width: 24,
-                  height: 24,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-                }}
-              >
-                ×
-              </span>
+              <>
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setModalVisible(true);
+                  }}
+                  style={{
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    cursor: 'pointer',
+                    background: 'rgba(0, 0, 0, 0.5)',
+                    color: '#fff',
+                    fontSize: 12,
+                    padding: '4px',
+                    textAlign: 'center',
+                    borderBottomLeftRadius: 4,
+                    borderBottomRightRadius: 4,
+                  }}
+                >
+                  重新上传
+                </div>
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRemove();
+                  }}
+                  style={{
+                    position: 'absolute',
+                    top: -8,
+                    right: -8,
+                    cursor: 'pointer',
+                    width: 22,
+                    height: 22,
+                    background: '#ff4d4f',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                    color: '#fff',
+                    fontSize: 14,
+                  }}
+                >
+                  <DeleteOutlined />
+                </div>
+              </>
             )}
           </div>
+        ) : (
+          uploadButton
         )}
-        
-        <Button
-          icon={uploading ? <LoadingOutlined /> : <PlusOutlined />}
-          disabled={disabled}
-          onClick={() => setModalVisible(true)}
-        >
-          {buttonText}
-        </Button>
       </div>
 
       <Modal
         title="上传图片"
         open={modalVisible}
-        onCancel={() => {
-          if (!uploading) {
-            setModalVisible(false);
-            setFileList([]);
-          }
-        }}
-        footer={null}
+        onCancel={handleCancel}
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <Button onClick={handleCancel} disabled={fileList.some(file => file.status === 'uploading')}>
+              取消
+            </Button>
+            <Button
+              type="primary"
+              onClick={handleConfirm}
+              disabled={!fileList.some(file => file.status === 'done') || fileList.some(file => file.status === 'uploading')}
+            >
+              确认
+            </Button>
+          </div>
+        }
         width={520}
-        maskClosable={!uploading}
-        closable={!uploading}
+        maskClosable={!fileList.some(file => file.status === 'uploading')}
+        closable={!fileList.some(file => file.status === 'uploading')}
       >
-        <Dragger {...uploadProps} disabled={uploading}>
+        <Dragger {...uploadProps} disabled={fileList.some(file => file.status === 'uploading')}>
           <p className="ant-upload-drag-icon">
             <InboxOutlined style={{ fontSize: 48, color: '#1890ff' }} />
           </p>
@@ -242,34 +346,52 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
           </p>
         </Dragger>
         
-        {fileList.length > 0 && (
+        {/* {uploadedUrl && (
           <div style={{ marginTop: 16 }}>
             <div style={{ fontSize: 14, color: '#666', marginBottom: 8 }}>
-              待上传文件：
+              上传成功，预览：
             </div>
-            {fileList.map((file) => (
-              <div
-                key={file.uid}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '8px 12px',
-                  backgroundColor: '#f5f5f5',
-                  borderRadius: 4,
-                  marginBottom: 8,
-                }}
-              >
-                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {file.name}
-                </span>
-                {uploading && (
-                  <LoadingOutlined style={{ marginLeft: 8, color: '#1890ff' }} />
-                )}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px',
+                backgroundColor: '#f5f5f5',
+                borderRadius: 4,
+                border: '1px solid #d9d9d9',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                <Image
+                  src={uploadedUrl}
+                  alt="预览"
+                  width={60}
+                  height={60}
+                  style={{
+                    borderRadius: 4,
+                    objectFit: 'cover',
+                  }}
+                  preview={false}
+                />
+                <div style={{ marginLeft: 12, flex: 1 }}>
+                  <div style={{ fontSize: 14, color: '#333', marginBottom: 4 }}>
+                    图片上传成功
+                  </div>
+                </div>
               </div>
-            ))}
+              <Button
+                type="text"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={handleRemoveUploadedFile}
+                disabled={uploading}
+              >
+                删除
+              </Button>
+            </div>
           </div>
-        )}
+        )} */}
       </Modal>
     </>
   );

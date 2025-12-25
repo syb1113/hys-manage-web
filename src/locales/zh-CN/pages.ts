@@ -49,6 +49,7 @@ export default {
   'pages.searchTable.updateForm.schedulingPeriod.timeRules': '请选择开始时间！',
   'pages.searchTable.titleDesc': '描述',
   'pages.searchTable.ruleName': '规则名称为必填项',
+  'pages.searchTable.DepartmentName': '科室昵称为必填项',
   'pages.searchTable.titleCallNo': '服务调用次数',
   'pages.searchTable.titleStatus': '状态',
   'pages.searchTable.nameStatus.default': '关闭',
