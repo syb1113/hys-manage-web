@@ -71,6 +71,7 @@ const CreateForm: FC<CreateFormProps> = (props) => {
           <ImageUpload
             buttonText="上传科室图片"
             maxSize={5}
+            maxCount={2}
           />
         </ProFormItem>
       </ModalForm>

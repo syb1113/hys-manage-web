@@ -7,8 +7,8 @@ import { uploadApi } from '@/services/ant-design-pro/common';
 const { Dragger } = Upload;
 
 export interface ImageUploadProps {
-  /** 上传成功后的回调，返回图片 URL */
-  onSuccess?: (url: string) => void;
+  /** 上传成功后的回调，返回图片 URL 或 URL 数组 */
+  onSuccess?: (url: string | string[]) => void;
   /** 限制文件大小（单位：MB），默认 5MB */
   maxSize?: number;
   /** 限制文件类型，默认为 'image/png,image/jpeg,image/jpg,image/svg+xml' */
@@ -19,12 +19,14 @@ export interface ImageUploadProps {
   showPreview?: boolean;
   /** 自定义上传按钮文本 */
   buttonText?: string;
-  /** 初始图片 URL */
-  value?: string;
+  /** 初始图片 URL 或 URL 数组 */
+  value?: string | string[];
   /** 值改变时的回调 */
-  onChange?: (url: string) => void;
+  onChange?: (url: string | string[]) => void;
   /** 是否禁用 */
   disabled?: boolean;
+  /** 最多上传图片数量，默认 1 */
+  maxCount?: number;
 }
 
 /**
@@ -41,14 +43,24 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
   value,
   onChange,
   disabled = false,
+  maxCount = 1,
 }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [fileList, setFileList] = useState<UploadFile[]>([]);
-  const [imageUrl, setImageUrl] = useState<string | undefined>(value);
+  // 将 value 转换为数组格式统一处理
+  const initialUrls = React.useMemo(() => {
+    if (!value) return [];
+    return Array.isArray(value) ? value : [value];
+  }, [value]);
+  const [imageUrls, setImageUrls] = useState<string[]>(initialUrls);
 
   // 当外部 value 变化时更新内部状态
   React.useEffect(() => {
-    setImageUrl(value);
+    if (!value) {
+      setImageUrls([]);
+    } else {
+      setImageUrls(Array.isArray(value) ? value : [value]);
+    }
   }, [value]);
 
   const handleUpload: UploadProps['customRequest'] = async (options) => {
@@ -92,12 +104,20 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
 
   // 确认按钮处理
   const handleConfirm = () => {
-    // 从 fileList 中获取已上传成功的文件 URL
-    const uploadedFile = fileList.find(file => file.status === 'done' && file.url);
-    if (uploadedFile?.url) {
-      setImageUrl(uploadedFile.url);
-      onChange?.(uploadedFile.url);
-      onSuccess?.(uploadedFile.url);
+    // 从 fileList 中获取所有已上传成功的文件 URL
+    const newUploadedFiles = fileList
+      .filter(file => file.status === 'done' && file.url)
+      .map(file => file.url!);
+    
+    if (newUploadedFiles.length > 0) {
+      // 合并已有的图片和新上传的图片
+      const allUrls = [...imageUrls, ...newUploadedFiles].slice(0, maxCount);
+      
+      // 根据 maxCount 决定返回格式
+      const result = maxCount === 1 ? allUrls[0] : allUrls;
+      setImageUrls(allUrls);
+      onChange?.(result);
+      onSuccess?.(result);
       setFileList([]);
       setModalVisible(false);
     }
@@ -112,10 +132,19 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
     }
   };
 
-  const handleRemove = () => {
-    setImageUrl(undefined);
-    onChange?.('');
-    onSuccess?.('');
+  const handleRemove = (index?: number) => {
+    if (maxCount === 1) {
+      // 单图片模式
+      setImageUrls([]);
+      onChange?.('');
+      onSuccess?.('');
+    } else if (index !== undefined) {
+      // 多图片模式，删除指定索引的图片
+      const newUrls = imageUrls.filter((_, i) => i !== index);
+      setImageUrls(newUrls);
+      onChange?.(newUrls);
+      onSuccess?.(newUrls);
+    }
   };
 
   // 验证文件类型
@@ -165,11 +194,27 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
 
   const uploadProps: UploadProps = {
     name: 'file',
-    multiple: false,
+    multiple: true, // 允许一次选择多个文件
     accept,
     fileList,
+    maxCount,
     customRequest: handleUpload,
-    beforeUpload: (file) => {
+    beforeUpload: (file, currentFileList) => {
+      // 检查当前已上传的图片数量
+      const currentUploadedCount = imageUrls.length;
+      // 当前 fileList 中待上传的文件数量（包括正在上传的和已完成的）
+      const pendingUploadCount = fileList.filter(
+        f => f.status === 'uploading' || f.status === 'done'
+      ).length;
+      // 本次要上传的文件数量（currentFileList 包含当前文件）
+      const newFilesCount = currentFileList.length;
+      
+      // 检查总数是否超过限制：已上传 + 待上传 + 本次新增 > maxCount
+      if (currentUploadedCount + pendingUploadCount + newFilesCount > maxCount) {
+        message.error(`最多只能上传 ${maxCount} 张图片，无法继续上传`);
+        return Upload.LIST_IGNORE;
+      }
+
       // 检查文件大小
       const isValidSize = file.size / 1024 / 1024 < maxSize;
       if (!isValidSize) {
@@ -199,8 +244,10 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
       });
       setFileList(updatedFileList);
     },
-    onRemove: () => {
-      setFileList([]);
+    onRemove: (file) => {
+      // 移除文件时更新列表
+      const newFileList = fileList.filter(item => item.uid !== file.uid);
+      setFileList(newFileList);
     }
   };
 
@@ -239,12 +286,13 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
 
   return (
     <>
-      <div style={{ display: 'inline-block' }}>
-        {imageUrl && showPreview ? (
-          <div style={{ position: 'relative', display: 'inline-block' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {/* 显示已上传的图片 */}
+        {imageUrls.map((url, index) => (
+          <div key={index} style={{ position: 'relative', display: 'inline-block' }}>
             <Image
-              src={imageUrl}
-              alt="预览"
+              src={url}
+              alt={`预览 ${index + 1}`}
               width={104}
               height={104}
               preview={{
@@ -258,32 +306,34 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
             />
             {!disabled && (
               <>
+                {maxCount > 1 && imageUrls.length < maxCount && (
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setModalVisible(true);
+                    }}
+                    style={{
+                      position: 'absolute',
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      cursor: 'pointer',
+                      background: 'rgba(0, 0, 0, 0.5)',
+                      color: '#fff',
+                      fontSize: 12,
+                      padding: '4px',
+                      textAlign: 'center',
+                      borderBottomLeftRadius: 4,
+                      borderBottomRightRadius: 4,
+                    }}
+                  >
+                    重新上传
+                  </div>
+                )}
                 <div
                   onClick={(e) => {
                     e.stopPropagation();
-                    setModalVisible(true);
-                  }}
-                  style={{
-                    position: 'absolute',
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    cursor: 'pointer',
-                    background: 'rgba(0, 0, 0, 0.5)',
-                    color: '#fff',
-                    fontSize: 12,
-                    padding: '4px',
-                    textAlign: 'center',
-                    borderBottomLeftRadius: 4,
-                    borderBottomRightRadius: 4,
-                  }}
-                >
-                  重新上传
-                </div>
-                <div
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleRemove();
+                    handleRemove(index);
                   }}
                   style={{
                     position: 'absolute',
@@ -307,8 +357,13 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
               </>
             )}
           </div>
-        ) : (
-          uploadButton
+        ))}
+        
+        {/* 显示上传按钮（如果未达到最大数量） */}
+        {imageUrls.length < maxCount && (
+          <div onClick={() => !disabled && setModalVisible(true)}>
+            {uploadButton}
+          </div>
         )}
       </div>
 
@@ -334,13 +389,19 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
         maskClosable={!fileList.some(file => file.status === 'uploading')}
         closable={!fileList.some(file => file.status === 'uploading')}
       >
-        <Dragger {...uploadProps} disabled={fileList.some(file => file.status === 'uploading')}>
+        <Dragger 
+          {...uploadProps} 
+          disabled={
+            fileList.some(file => file.status === 'uploading') || 
+            imageUrls.length >= maxCount
+          }
+        >
           <p className="ant-upload-drag-icon">
             <InboxOutlined style={{ fontSize: 48, color: '#1890ff' }} />
           </p>
           <p className="ant-upload-text">点击或拖拽文件到此区域上传</p>
           <p className="ant-upload-hint">
-            支持单个图片上传，文件大小不超过 {maxSize}MB
+            最多可上传 {maxCount} 张，文件大小不超过 {maxSize}MB
             <br />
             支持格式：{allowedExtensions.map(ext => ext.toUpperCase()).join('、')}
           </p>
